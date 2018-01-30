@@ -14,9 +14,57 @@ Explanation
 
 ---
 
+- [出发前准备](#确定主文件)
 
+---
 
-- [有关-web-worker的资料](https://developer.mozilla.org/zh-CN/docs/Web/API/Worker/Worker)
+1. [定义局部变量](#定义局部变量)
+
+2. [定义-生命周期-钩子](#生命周期-钩子)
+
+- [executeEach](#executeEach)
+
+- [callErrorListener](#callErrorListener)
+
+- [addEventListener](#addEventListener)
+
+- [removeEventListener](#removeEventListener)
+
+- [postError](#postError)
+
+- [runPostMessage](#runPostMessage)
+
+- [postMessage](#postMessage)
+
+- [terminate](#terminate)
+
+- [workerPostMessage](#workerPostMessage)
+
+- [workerAddEventListener](#workerAddEventListener)
+
+3. [主逻辑 - 开启 - 最好从这里开始](#主逻辑)
+
+4. [有关-web-worker的资料](https://developer.mozilla.org/zh-CN/docs/Web/API/Worker/Worker)
+
+---
+
+- ~~polyfill.js~~
+
+---
+
+说明一下，两个关键点
+
+1. `Myworker` 
+
+本项目 `pseudo.worker`, 作为 `Worker` 的 polyfill
+
+> Myworker = new Worker(`worker.js`) // Worker == pseudo-worker
+
+2. `worker.js`
+
+这就是-**Worker-Api**-引入的, 脚本文件
+
+[可以看看有关-web-worker的资料](https://developer.mozilla.org/zh-CN/docs/Web/API/Worker/Worker)
 
 ---
 
@@ -29,6 +77,8 @@ package.json
 ```
 
 ## index
+
+如果-你是一开始看-[请点击从定义变量开始](#定义局部变量)
 
 ### doEval
 
@@ -65,7 +115,7 @@ function doEval(self, __pseudoworker_script) {
         // function doEval(self, 
 ```
 
-### pseudoWorker
+### pseudo-Worker
 
 #### 定义局部变量
 
@@ -93,6 +143,8 @@ function PseudoWorker(path) {
 
 代码 23-136
 
+#### executeEach
+
 ``` js
   // custom each loop is for IE8 support
   function executeEach(arr, fun) {
@@ -104,6 +156,15 @@ function PseudoWorker(path) {
     }
   }
 
+```
+
+对`arr`每个值，运行`fun(arr[i])`
+
+---
+
+#### callErrorListener
+
+``` js
   function callErrorListener(err) {
     return function (listener) {
       listener({
@@ -114,6 +175,17 @@ function PseudoWorker(path) {
     };
   }
 
+``` 
+
+更换-`err`-数据结构
+
+---
+
+#### addEventListener
+
+作为 `Myworker.addEventListener`
+
+``` js
   function addEventListener(type, fun) {
     /* istanbul ignore else */
     if (type === 'message') {
@@ -123,6 +195,23 @@ function PseudoWorker(path) {
     }
   }
 
+```
+
+``` js
+Myworker = new Worker()
+```
+
+- `messageListeners` message信息-触发函数->存储
+
+- `errorListeners` err信息-触发函数->存储
+
+---
+
+#### removeEventListener
+
+作为 `Myworker.removeEventListener`
+
+``` js
   function removeEventListener(type, fun) {
       var listeners;
       /* istanbul ignore else */
@@ -142,7 +231,27 @@ function PseudoWorker(path) {
         }
       }
   }
+```
 
+``` js
+Myworker = new Worker()
+```
+
+- listeners
+
+对`type` = 'message'|'error'
+
+然后遍历 `while listeners`
+
+删除相等的函数 `if (listener === fun) {`
+
+---
+
+#### postError
+
+规范错误输出, 并执行 `Myworker.onerror` 触发函数
+
+``` js
   function postError(err) {
     var callFun = callErrorListener(err);
     if (typeof api.onerror === 'function') {
@@ -154,13 +263,25 @@ function PseudoWorker(path) {
     executeEach(errorListeners, callFun);
     executeEach(workerErrorListeners, callFun);
   }
+```
 
-  function runPostMessage(msg) {
+- [callErrorListener 改变数据存储结构-返回函数](#callerrorlistener)
+
+- [executeEach-遍历第一个变量 arr, 运行第二个变量fun(arr[i])](#executeeach)
+
+---
+
+#### runPostMessage
+
+传输-在`worker.js`-onmessage->postMessage(`msg`) 的 信息
+
+``` js
+ function runPostMessage(msg) {
     function callFun(listener) {
       try {
         listener({data: msg});
       } catch (err) {
-        postError(err);
+        postError(err); 
       }
     }
 
@@ -170,24 +291,79 @@ function PseudoWorker(path) {
     executeEach(workerMessageListeners, callFun);
   }
 
+```
+
+- [postError 触发Myworker.onerror](#posterror)
+
+- [executeEach-遍历第一个变量 arr, 运行第二个变量fun(arr[i])](#executeeach)
+
+---
+
+#### postMessage
+
+Myworker.postMessage 的 api
+
+``` js
   function postMessage(msg) {
     if (typeof msg === 'undefined') {
       throw new Error('postMessage() requires an argument');
     }
-    if (terminated) {
+    if (terminated) { // 如果-停
       return;
     }
-    if (!script) {
-      postMessageListeners.push(msg);
+    if (!script) { // 并没有脚本
+      postMessageListeners.push(msg); // 存储一下信息
       return;
     }
     runPostMessage(msg);
   }
 
+```
+
+``` js
+Myworker = new Worker()
+```
+
+> 作为 `Myworker.postMessage`
+
+- runPostMessage
+
+---
+
+#### terminate
+
+设置-传输停止
+
+``` js
   function terminate() {
     terminated = true;
   }
+```
 
+``` js
+Myworker = new Worker()
+```
+
+> 作为 `Myworker.terminate`
+
+---
+
+#### workerPostMessage
+
+作为 `worker.js 中的 postMessage`
+
+``` js
+// worker.js
+onmessage = function(e) {
+  console.log('Message received from main script');
+  var workerResult = 'Result: ' + (e.data[0] * e.data[1]);
+  console.log('Posting message back to main script');
+  postMessage(workerResult); // <---
+  // 输出信息给 worker.onmessage
+}
+```
+
+``` js
   function workerPostMessage(msg) {
     function callFun(listener) {
       listener({
@@ -195,11 +371,26 @@ function PseudoWorker(path) {
       });
     }
     if (typeof api.onmessage === 'function') {
-      callFun(api.onmessage);
+      // Myworker = new Worker(path)
+      // Myworker.onmessage 有所定义
+      callFun(api.onmessage); // 传输到外面
     }
     executeEach(messageListeners, callFun);
   }
+```
 
+我们结合- 本节`worker.js` 例子说明一下，
+
+- [`executeEach(messageListeners, callFun);`](#executeeach)
+
+
+---
+
+#### workerAddEventListener
+
+作为 `worker.js 中的 addEventListener`
+
+``` js
   function workerAddEventListener(type, fun) {
     /* istanbul ignore else */
     if (type === 'message') {
@@ -208,33 +399,8 @@ function PseudoWorker(path) {
       workerErrorListeners.push(fun);
     }
   }
-
 ```
 
-#### executeEach
-
-#### callErrorListener
-
-#### addEventListener
-
-#### removeEventListener
-
-#### postError
-
-#### runPostMessage
-
-#### postMessage
-
-#### terminate
-
-#### workerPostMessage
-
-worker.js
-
-``` js
-onmessage= // ..
-```
-#### workerAddEventListener
 
 ---
 
@@ -287,21 +453,27 @@ module.exports = PseudoWorker;
 
 在这里，我们再理清一下`worker`的信息传输顺序
 
+> Myworker = new Worker(path)
+
 - 从`Myworker.postMessage(message)`
 
 - message - e.data -> `worker.js` 中 `onmessage(e)`
 
-- `worker.js`- `onmessage(e)` 中 `postMessage(msg)`
+- `worker.js`- `onmessage(e)` 中 `postMessage(msg)` ->
 
 - 传输-msg-到 e.data -> `Myworker.onmessage(e)`
 
 ---
 
-1. [`doEval(workerSelf, script); 解释 >>`](#doeval)
+1. [`doEval(workerSelf, script); 请先看这个 >>`](#doeval)
 
-在`xhr.send();` - 我们对·path·的获取 - 触发 - `onreadystatechange` 函数- `doEval`
-
+在`xhr.send();` - 我们对·path·的获取 - 触发`onreadystatechange` 函数 - 运行`doEval 函数`
 
 2. `workerPostMessage` 赋予 `worker.js` - postMessage
 
-> [workerPostMessage](#workerpostmessage)
+> [workerPostMessage ](#workerpostmessage)
+
+3. `workerAddEventListener` 赋予 `worker.js` - addEventListener
+
+> [workerAddEventListener](#workeraddeventlistener)
+
