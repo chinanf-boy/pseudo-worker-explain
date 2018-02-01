@@ -8,7 +8,7 @@ Explanation
 
 > "version": "1.0.0"
 
-[github source](https://github.com/)
+[github source](https://github.com/nolanlawson/pseudo-worker)
 
 ~~[english](./README.en.md)~~
 
